@@ -130,14 +130,23 @@ function Remove-Instance([string]$InstId) {
 }
 
 function Get-Logs($IP, $Sess) {
-    Invoke-Command -Session $sess -ScriptBlock {
-        Copy-Item -Path "$ENV:UserProfile\OpenVPN\log\*.log" -Destination "." -Recurse
-        Compress-Archive -Path "*.log" -DestinationPath "$HOME\openvpn-logs.zip"
-    }
+    try {
+        Invoke-Command -Session $sess -ScriptBlock {
+            Copy-Item -Path "$ENV:UserProfile\OpenVPN\log\*.log" -Destination "." -Recurse
+            Compress-Archive -Path "*.log" -DestinationPath "$HOME\openvpn-logs.zip"
+        }
 
-    scp -i $SSH_KEY administrator@${IP}:openvpn-logs.zip .
+        scp -i $SSH_KEY administrator@${IP}:openvpn-logs.zip .
+    }
+    catch {
+        Write-Host "Get-Logs failed: $_"
+    }
 }
 
+if (-not (Test-Path $MSI_PATH -PathType Leaf)) {
+    Write-Host "File $MSI_PATH does not exist"
+    exit 2
+}
 $exitcode = 0
 try {
     Set-DefaultAWSRegion -Region $REGION
@@ -153,7 +162,7 @@ try {
     $exitcode = Invoke-Command -Session $sess -FilePath Start-LocalTest.ps1 -ArgumentList @($Driver, 1, "C:/TA/ca.crt", "C:/TA/t_client.crt", "C:/TA/t_client.key", $Tests, 1)
 }
 catch {
-    Write-Host $_
+    Write-Host "Test failed with exception: $_"
     $exitcode = 1
 }
 finally {
